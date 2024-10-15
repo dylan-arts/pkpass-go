@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,94 +19,115 @@ import (
 // the returned reader into a file, this file is your Apple pass and can be opened
 // from iOS and macOS devices.
 func New(passDir, password string, cert io.Reader) (io.Reader, error) {
-	// Create a temporary directory that we will use as a scratch pad for our
-	// openssl commands.
+	log.Println("Starting pkpass creation")
+
+	// Create a temporary directory for openssl commands.
 	tempDir, err := ioutil.TempDir("", "")
 	if err != nil {
+		log.Printf("Error creating temp directory: %v", err)
 		return nil, err
 	}
+	log.Printf("Temp directory created: %s", tempDir)
 	defer os.RemoveAll(tempDir)
 
-	// Copy the certificate into a file so that it can be used by
-	// os.Exec
+	// Copy certificate to file
 	c, err := os.Create(fmt.Sprintf("%s/certificates.p12", tempDir))
 	if err != nil {
+		log.Printf("Error creating certificate file: %v", err)
 		return nil, err
 	}
 	defer c.Close()
 
 	_, err = io.Copy(c, cert)
 	if err != nil {
+		log.Printf("Error copying certificate: %v", err)
 		return nil, err
 	}
 
-	// Create the certificate.pem file
+	log.Println("Certificate copied to temp directory")
+
+	// Create certificate.pem
 	err = pem(tempDir, password, cert)
 	if err != nil {
+		log.Printf("Error creating PEM file: %v", err)
 		return nil, err
 	}
+	log.Println("PEM file created")
 
-	// Create the key.pem file
+	// Create key.pem
 	err = key(tempDir, password, cert)
 	if err != nil {
+		log.Printf("Error creating key PEM file: %v", err)
 		return nil, err
 	}
+	log.Println("Key PEM file created")
 
-	// Create a new zip buffer that we will use to produce
-	// the final output
+	// Create zip buffer
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 	defer w.Close()
 
-	// Create the bundle of files, this will include everything
-	// in the directory
+	// Bundle the files
 	err = bundle(w, passDir, tempDir)
 	if err != nil {
+		log.Printf("Error bundling files: %v", err)
 		return nil, err
 	}
+	log.Println("Files bundled successfully")
 
-	// Sign the manifest.json
+	// Sign the manifest
 	err = sign(w, tempDir, password)
 	if err != nil {
+		log.Printf("Error signing the manifest: %v", err)
 		return nil, err
 	}
+	log.Println("Manifest signed successfully")
 
 	return buf, nil
 }
 
-// key will generate the private key that is needed in the openssl smime command
 func key(tempDir, password string, cert io.Reader) error {
+	log.Println("Generating key.pem file")
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in",
-		fmt.Sprintf("%s/certificates.p12", tempDir),
+		"-in", fmt.Sprintf("%s/certificates.p12", tempDir),
 		"-nocerts",
-		"-out",
-		fmt.Sprintf("%s/key.pem", tempDir),
-		"-passin",
-		fmt.Sprintf("pass:%s", password),
-		"-passout",
-		fmt.Sprintf("pass:%s1234", password),
+		"-out", fmt.Sprintf("%s/key.pem", tempDir),
+		"-passin", fmt.Sprintf("pass:%s", password),
+		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
-	return cmd.Run()
+	log.Printf("Running command: %v", cmd)
+	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
+	if err != nil {
+		log.Printf("Error running command: %v", err)
+		log.Printf("Command output: %s", output)
+		return err
+	}
+	log.Println("Key PEM file generated")
+	return nil
 }
 
-// key will generate the certificate's pem file that is needed in the openssl smime command
 func pem(tempDir, password string, cert io.Reader) error {
+	log.Println("Generating certificate.pem file")
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in",
-		fmt.Sprintf("%s/certificates.p12", tempDir),
+		"-in", fmt.Sprintf("%s/certificates.p12", tempDir),
 		"-clcerts",
 		"-nokeys",
-		"-out",
-		fmt.Sprintf("%s/certificate.pem", tempDir),
-		"-passin",
-		fmt.Sprintf("pass:%s", password),
+		"-out", fmt.Sprintf("%s/certificate.pem", tempDir),
+		"-passin", fmt.Sprintf("pass:%s", password),
 	)
-	return cmd.Run()
+	log.Printf("Running command: %v", cmd)
+	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
+	if err != nil {
+		log.Printf("Error running command: %v", err)
+		log.Printf("Command output: %s", output)
+		return err
+	}
+	log.Println("Certificate PEM file generated")
+	return nil
 }
 
 // bundle will read all of the files in the passDir, create a manifest.json, and
@@ -179,60 +201,51 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 // in key and pem respectively. It will then write the signature file to the zip
 // archive so that we can open the pass.
 func sign(w *zip.Writer, tempDir, password string) error {
-	// Copy the wwdr certificate into a file so that it can be used
-	// by openssl
-	f, err := os.Create(fmt.Sprintf("%s/wwdr.pem", tempDir))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write([]byte(wwdr))
-	if err != nil {
-		return err
-	}
+	log.Println("Signing the manifest")
 
 	// Sign the bundle
 	cmd := exec.Command(
 		"openssl",
 		"smime",
 		"-sign",
-		"-signer",
-		fmt.Sprintf("%s/certificate.pem", tempDir),
-		"-inkey",
-		fmt.Sprintf("%s/key.pem", tempDir),
-		"-certfile",
-		fmt.Sprintf("%s/wwdr.pem", tempDir),
-		"-in",
-		fmt.Sprintf("%s/manifest.json", tempDir),
-		"-out",
-		fmt.Sprintf("%s/signature", tempDir),
-		"-outform",
-		"der",
+		"-signer", fmt.Sprintf("%s/certificate.pem", tempDir),
+		"-inkey", fmt.Sprintf("%s/key.pem", tempDir),
+		"-certfile", fmt.Sprintf("%s/wwdr.pem", tempDir),
+		"-in", fmt.Sprintf("%s/manifest.json", tempDir),
+		"-out", fmt.Sprintf("%s/signature", tempDir),
+		"-outform", "der",
 		"-binary",
-		"-passin",
-		fmt.Sprintf("pass:%s1234", password),
+		"-passin", fmt.Sprintf("pass:%s1234", password),
 	)
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
+	log.Printf("Running command: %v", cmd)
+	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
 	if err != nil {
+		log.Printf("Error running command: %v", err)
+		log.Printf("Command output: %s", output)
 		return err
 	}
+	log.Println("Manifest signed successfully")
 
+	// Add signature to the zip
 	sig, err := os.Open(fmt.Sprintf("%s/signature", tempDir))
 	if err != nil {
+		log.Printf("Error opening signature file: %v", err)
 		return err
 	}
-	defer f.Close()
+	defer sig.Close()
 
 	zw, err := w.Create("signature")
 	if err != nil {
+		log.Printf("Error creating signature file in zip: %v", err)
 		return err
 	}
 
 	_, err = io.Copy(zw, sig)
 	if err != nil {
+		log.Printf("Error copying signature to zip: %v", err)
 		return err
 	}
 
+	log.Println("Signature added to the zip")
 	return nil
 }
