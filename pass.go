@@ -119,7 +119,8 @@ func pem(tempDir, password string, cert io.Reader) error {
 		"-nokeys",
 		"-out", fmt.Sprintf("%s/certificate.pem", tempDir),
 		"-passin", fmt.Sprintf("pass:%s", password),
-		"-provider", "legacy",
+		"-provider", "legacy", // Add legacy provider if needed
+		"-nomacver", // Disable MAC verification
 	)
 	log.Printf("Running command: %v", cmd)
 	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
