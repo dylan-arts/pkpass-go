@@ -210,7 +210,7 @@ func sign(w *zip.Writer, tempDir, password string) error {
 		"-sign",
 		"-signer", fmt.Sprintf("%s/certificate.pem", tempDir),
 		"-inkey", fmt.Sprintf("%s/key.pem", tempDir),
-		"-certfile", fmt.Sprintf("%s/wwdr.pem", tempDir),
+		"-certfile", "wwdr.pem",
 		"-in", fmt.Sprintf("%s/manifest.json", tempDir),
 		"-out", fmt.Sprintf("%s/signature", tempDir),
 		"-outform", "der",
