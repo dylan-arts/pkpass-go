@@ -97,7 +97,7 @@ func key(tempDir, password string, cert io.Reader) error {
 		"-passin", fmt.Sprintf("pass:%s", password),
 		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
-	log.Printf("Running command: %v", cmd)
+
 	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
 	if err != nil {
 		log.Printf("Error running command: %v", err)
@@ -119,7 +119,7 @@ func pem(tempDir, password string, cert io.Reader) error {
 		"-out", fmt.Sprintf("%s/certificate.pem", tempDir),
 		"-passin", fmt.Sprintf("pass:%s", password),
 	)
-	log.Printf("Running command: %v", cmd)
+
 	output, err := cmd.CombinedOutput() // Capture both stdout and stderr
 	if err != nil {
 		log.Printf("Error running command: %v", err)
