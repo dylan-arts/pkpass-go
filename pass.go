@@ -21,6 +21,15 @@ import (
 func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Starting pkpass creation")
 
+	if _, err := os.Stat(passDir); os.IsNotExist(err) {
+		// Create the directory
+		err := os.MkdirAll(passDir, 0755)
+		if err != nil {
+			log.Printf("Error creating directory: %v", err)
+			return nil, err
+		}
+	}
+
 	// Copy certificate to file
 	c, err := os.Create(fmt.Sprintf("%s/certificates.p12", passDir))
 	if err != nil {
