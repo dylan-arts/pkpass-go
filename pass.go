@@ -24,7 +24,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	tempDir := "/app/storage/tmp"
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		// Create the directory
-		err := os.MkdirAll(passDir, 0755)
+		err := os.MkdirAll(tempDir, 0755)
 		if err != nil {
 			log.Printf("Error creating directory: %v", err)
 			return nil, err
