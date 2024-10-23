@@ -21,15 +21,14 @@ import (
 func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Starting pkpass creation")
 
-	tempDir := "/app/storage/tmp"
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// Create the directory
-		err := os.MkdirAll(tempDir, 0755)
-		if err != nil {
-			log.Printf("Error creating directory: %v", err)
-			return nil, err
-		}
+	// Create a temporary directory for openssl commands.
+	tempDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		log.Printf("Error creating temp directory: %v", err)
+		return nil, err
 	}
+	log.Printf("Temp directory created: %s", tempDir)
+	defer os.RemoveAll(tempDir)
 
 	// Copy certificate to file
 	c, err := os.Create(fmt.Sprintf("%s/certificates.p12", tempDir))
