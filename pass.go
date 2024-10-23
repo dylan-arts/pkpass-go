@@ -21,17 +21,8 @@ import (
 func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Starting pkpass creation")
 
-	// Create a temporary directory for openssl commands.
-	tempDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		log.Printf("Error creating temp directory: %v", err)
-		return nil, err
-	}
-	log.Printf("Temp directory created: %s", tempDir)
-	defer os.RemoveAll(tempDir)
-
 	// Copy certificate to file
-	c, err := os.Create(fmt.Sprintf("%s/certificates.p12", tempDir))
+	c, err := os.Create(fmt.Sprintf("%s/certificates.p12", passDir))
 	if err != nil {
 		log.Printf("Error creating certificate file: %v", err)
 		return nil, err
@@ -47,7 +38,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Certificate copied to temp directory")
 
 	// Create certificate.pem
-	err = pem(tempDir, password, cert)
+	err = pem(passDir, password, cert)
 	if err != nil {
 		log.Printf("Error creating PEM file: %v", err)
 		return nil, err
@@ -55,7 +46,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("PEM file created")
 
 	// Create key.pem
-	err = key(tempDir, password, cert)
+	err = key(passDir, password, cert)
 	if err != nil {
 		log.Printf("Error creating key PEM file: %v", err)
 		return nil, err
@@ -68,7 +59,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	defer w.Close()
 
 	// Bundle the files
-	err = bundle(w, passDir, tempDir)
+	err = bundle(w, passDir, passDir)
 	if err != nil {
 		log.Printf("Error bundling files: %v", err)
 		return nil, err
@@ -76,7 +67,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Files bundled successfully")
 
 	// Sign the manifest
-	err = sign(w, tempDir, password)
+	err = sign(w, passDir, password)
 	if err != nil {
 		log.Printf("Error signing the manifest: %v", err)
 		return nil, err
