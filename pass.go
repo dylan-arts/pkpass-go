@@ -22,7 +22,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Starting pkpass creation")
 
 	// Create a temporary directory for openssl commands.
-	tempDir, err := ioutil.TempDir("", "")
+	tempDir, err := ioutil.TempDir("/app/storage", "")
 	if err != nil {
 		log.Printf("Error creating temp directory: %v", err)
 		return nil, err
