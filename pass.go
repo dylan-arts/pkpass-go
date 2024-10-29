@@ -18,10 +18,10 @@ import (
 // password needed to open the certificate, and the certificate. You should read
 // the returned reader into a file, this file is your Apple pass and can be opened
 // from iOS and macOS devices.
-func New(passDir, password string, cert io.Reader) (io.Reader, error) {
+func New(passID string, password string, cert io.Reader) (io.Reader, error) {
 	log.Println("Starting pkpass creation")
 
-	tempDir := "/app/storage/tmp"
+	tempDir := fmt.Sprintf("/app/storage/tmp/%s", passID)
 	err := os.MkdirAll(tempDir, 0755)
 	if err != nil {
 		log.Printf("Error creating temp directory: %v", err)
@@ -67,7 +67,7 @@ func New(passDir, password string, cert io.Reader) (io.Reader, error) {
 	defer w.Close()
 
 	// Bundle the files
-	err = bundle(w, passDir, tempDir)
+	err = bundle(w, passID, tempDir)
 	if err != nil {
 		log.Printf("Error bundling files: %v", err)
 		return nil, err
