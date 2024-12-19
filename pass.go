@@ -20,7 +20,7 @@ import (
 //   - passID: an identifier for the pass (used for reading content from passDir).
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
-func New(workingDir, wwdrCertPath, passID, password string, cert io.Reader) (io.Reader, error) {
+func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
 	// Create a unique temporary directory under the specified workingDir
 	tempDir, err := os.MkdirTemp(workingDir, "pass-*")
 	if err != nil {
@@ -60,7 +60,7 @@ func New(workingDir, wwdrCertPath, passID, password string, cert io.Reader) (io.
 	}
 
 	// Sign the manifest
-	if err = sign(w, tempDir, password, wwdrCertPath); err != nil {
+	if err = sign(w, tempDir, password, workingDir); err != nil {
 		return nil, err
 	}
 
