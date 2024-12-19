@@ -86,7 +86,7 @@ func key(tempDir, password string) error {
 	)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", tempDir, err.Error()), pkpassCreationError)
 	}
 
 	return nil
@@ -104,7 +104,7 @@ func pem(tempDir, password string) error {
 	)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", tempDir, err.Error()), pkpassCreationError)
 	}
 
 	return nil
