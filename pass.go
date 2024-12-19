@@ -23,7 +23,6 @@ const (
 // New creates a new Apple pass, using a randomly generated temporary directory.
 // Parameters:
 //   - workingDir: the base directory where temporary directories and files will be created.
-//   - wwdrCertPath: the file path to the Apple WWDR certificate (e.g. "/path/to/wwdr.pem").
 //   - passID: an identifier for the pass (used for reading content from passDir).
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
@@ -67,7 +66,7 @@ func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error)
 	}
 
 	// Sign the manifest
-	if err = sign(w, tempDir, password, workingDir); err != nil {
+	if err = sign(w, tempDir, password, fmt.Sprintf("%s/wwdr.pem", workingDir)); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +170,7 @@ func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 		"-sign",
 		"-signer", filepath.Join(tempDir, "certificate.pem"),
 		"-inkey", filepath.Join(tempDir, "key.pem"),
-		"-certfile", wwdrCertPath, // Use the provided WWDR certificate path
+		"-certfile", wwdrCertPath,
 		"-in", filepath.Join(tempDir, "manifest.json"),
 		"-out", filepath.Join(tempDir, "signature"),
 		"-outform", "der",
