@@ -14,9 +14,15 @@ import (
 )
 
 // New creates a new Apple pass, using a randomly generated temporary directory.
-func New(passID string, password string, cert io.Reader) (io.Reader, error) {
-	// Create a unique temporary directory
-	tempDir, err := os.MkdirTemp("/app/storage/tmp", "pass-*")
+// Parameters:
+//   - workingDir: the base directory where temporary directories and files will be created.
+//   - wwdrCertPath: the file path to the Apple WWDR certificate (e.g. "/path/to/wwdr.pem").
+//   - passID: an identifier for the pass (used for reading content from passDir).
+//   - password: the password for unlocking the .p12 certificate.
+//   - cert: an io.Reader providing the .p12 certificate data.
+func New(workingDir, wwdrCertPath, passID, password string, cert io.Reader) (io.Reader, error) {
+	// Create a unique temporary directory under the specified workingDir
+	tempDir, err := os.MkdirTemp(workingDir, "pass-*")
 	if err != nil {
 		return nil, err
 	}
@@ -48,13 +54,13 @@ func New(passID string, password string, cert io.Reader) (io.Reader, error) {
 	w := zip.NewWriter(buf)
 	defer w.Close()
 
-	// Bundle files from passID directory (could also be passed in or handled elsewhere)
+	// Bundle files from the passID directory
 	if err = bundle(w, passID, tempDir); err != nil {
 		return nil, err
 	}
 
 	// Sign the manifest
-	if err = sign(w, tempDir, password); err != nil {
+	if err = sign(w, tempDir, password, wwdrCertPath); err != nil {
 		return nil, err
 	}
 
@@ -143,14 +149,14 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 	return nil
 }
 
-func sign(w *zip.Writer, tempDir, password string) error {
+func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 	cmd := exec.Command(
 		"openssl",
 		"smime",
 		"-sign",
 		"-signer", filepath.Join(tempDir, "certificate.pem"),
 		"-inkey", filepath.Join(tempDir, "key.pem"),
-		"-certfile", "/app/storage/wwdr.pem",
+		"-certfile", wwdrCertPath, // Use the provided WWDR certificate path
 		"-in", filepath.Join(tempDir, "manifest.json"),
 		"-out", filepath.Join(tempDir, "signature"),
 		"-outform", "der",
