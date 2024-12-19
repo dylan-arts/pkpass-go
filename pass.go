@@ -50,10 +50,10 @@ func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error)
 
 	// Extract key and cert from p12
 	if err = pem(tempDir, password); err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return nil, err
 	}
 	if err = key(tempDir, password); err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return nil, err
 	}
 
 	// Create zip buffer
@@ -63,12 +63,12 @@ func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error)
 
 	// Bundle files from the passID directory
 	if err = bundle(w, passID, tempDir); err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return nil, err
 	}
 
 	// Sign the manifest
 	if err = sign(w, tempDir, password, workingDir); err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return nil, err
 	}
 
 	return buf, nil
@@ -85,7 +85,11 @@ func key(tempDir, password string) error {
 		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
 	_, err := cmd.CombinedOutput()
-	return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
+	return nil
 }
 
 func pem(tempDir, password string) error {
@@ -99,7 +103,11 @@ func pem(tempDir, password string) error {
 		"-passin", fmt.Sprintf("pass:%s", password),
 	)
 	_, err := cmd.CombinedOutput()
-	return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
+	return nil
 }
 
 func bundle(w *zip.Writer, passDir, tempDir string) error {
