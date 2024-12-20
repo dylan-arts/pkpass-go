@@ -76,9 +76,9 @@ func key(workingDir, password string) error {
 		"-passin", fmt.Sprintf("pass:%s", password),
 		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
-	_, err := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", workingDir, err.Error()), pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s, error: %s, and output: %s", workingDir, err.Error(), output), pkpassCreationError)
 	}
 
 	return nil
@@ -94,9 +94,9 @@ func pem(workingDir, password string) error {
 		"-out", filepath.Join(workingDir, "certificate.pem"),
 		"-passin", fmt.Sprintf("pass:%s", password),
 	)
-	_, err := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", workingDir, err.Error()), pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s, error: %s, and output: %s", workingDir, err.Error(), output), pkpassCreationError)
 	}
 
 	return nil
