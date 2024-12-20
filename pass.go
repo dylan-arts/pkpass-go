@@ -27,15 +27,8 @@ const (
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
 func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
-	// Create a unique temporary directory under the specified workingDir
-	tempDir, err := os.MkdirTemp(workingDir, "pass-*")
-	if err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-	}
-	defer os.RemoveAll(tempDir)
-
 	// Copy certificate to file
-	certFile := filepath.Join(tempDir, "certificates.p12")
+	certFile := filepath.Join(workingDir, "certificates.p12")
 	c, err := os.Create(certFile)
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
@@ -48,10 +41,10 @@ func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error)
 	}
 
 	// Extract key and cert from p12
-	if err = pem(tempDir, password); err != nil {
+	if err = pem(workingDir, password); err != nil {
 		return nil, err
 	}
-	if err = key(tempDir, password); err != nil {
+	if err = key(workingDir, password); err != nil {
 		return nil, err
 	}
 
@@ -61,55 +54,55 @@ func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error)
 	defer w.Close()
 
 	// Bundle files from the passID directory
-	if err = bundle(w, passID, tempDir); err != nil {
+	if err = bundle(w, passID, workingDir); err != nil {
 		return nil, err
 	}
 
 	// Sign the manifest
-	if err = sign(w, tempDir, password, fmt.Sprintf("%s/wwdr.pem", workingDir)); err != nil {
+	if err = sign(w, workingDir, password, fmt.Sprintf("%s/wwdr.pem", workingDir)); err != nil {
 		return nil, err
 	}
 
 	return buf, nil
 }
 
-func key(tempDir, password string) error {
+func key(workingDir, password string) error {
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in", filepath.Join(tempDir, "certificates.p12"),
+		"-in", filepath.Join(workingDir, "certificates.p12"),
 		"-nocerts",
-		"-out", filepath.Join(tempDir, "key.pem"),
+		"-out", filepath.Join(workingDir, "key.pem"),
 		"-passin", fmt.Sprintf("pass:%s", password),
 		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", tempDir, err.Error()), pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", workingDir, err.Error()), pkpassCreationError)
 	}
 
 	return nil
 }
 
-func pem(tempDir, password string) error {
+func pem(workingDir, password string) error {
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in", filepath.Join(tempDir, "certificates.p12"),
+		"-in", filepath.Join(workingDir, "certificates.p12"),
 		"-clcerts",
 		"-nokeys",
-		"-out", filepath.Join(tempDir, "certificate.pem"),
+		"-out", filepath.Join(workingDir, "certificate.pem"),
 		"-passin", fmt.Sprintf("pass:%s", password),
 	)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", tempDir, err.Error()), pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s and error: %s", workingDir, err.Error()), pkpassCreationError)
 	}
 
 	return nil
 }
 
-func bundle(w *zip.Writer, passDir, tempDir string) error {
+func bundle(w *zip.Writer, passDir, workingDir string) error {
 	files, err := ioutil.ReadDir(passDir)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
@@ -143,7 +136,7 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 	}
 
 	// Write manifest.json
-	manifestPath := filepath.Join(tempDir, "manifest.json")
+	manifestPath := filepath.Join(workingDir, "manifest.json")
 	mf, err := os.Create(manifestPath)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
@@ -163,16 +156,16 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 	return nil
 }
 
-func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
+func sign(w *zip.Writer, workingDir, password, wwdrCertPath string) error {
 	cmd := exec.Command(
 		"openssl",
 		"smime",
 		"-sign",
-		"-signer", filepath.Join(tempDir, "certificate.pem"),
-		"-inkey", filepath.Join(tempDir, "key.pem"),
+		"-signer", filepath.Join(workingDir, "certificate.pem"),
+		"-inkey", filepath.Join(workingDir, "key.pem"),
 		"-certfile", wwdrCertPath,
-		"-in", filepath.Join(tempDir, "manifest.json"),
-		"-out", filepath.Join(tempDir, "signature"),
+		"-in", filepath.Join(workingDir, "manifest.json"),
+		"-out", filepath.Join(workingDir, "signature"),
 		"-outform", "der",
 		"-binary",
 		"-passin", fmt.Sprintf("pass:%s1234", password),
@@ -183,7 +176,7 @@ func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
-	sig, err := os.Open(filepath.Join(tempDir, "signature"))
+	sig, err := os.Open(filepath.Join(workingDir, "signature"))
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
