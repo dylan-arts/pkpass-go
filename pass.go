@@ -26,14 +26,17 @@ const (
 //   - passID: an identifier for the pass (used for reading content from passDir).
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
-func New(workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
+func New(environment, workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
 	// Copy certificate to file
 	certFile := filepath.Join(workingDir, "certificates.p12")
 	c, err := os.Create(certFile)
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
-	defer c.Close()
+
+	if environment != "develop" {
+		defer c.Close()
+	}
 
 	_, err = io.Copy(c, cert)
 	if err != nil {
