@@ -182,9 +182,9 @@ func sign(w *zip.Writer, workingDir, password, wwdrCertPath string) error {
 		"-passin", fmt.Sprintf("pass:%s1234", password),
 	)
 
-	_, err := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed with err: %s and output: %s", err.Error(), output), pkpassCreationError)
 	}
 
 	sig, err := os.Open(filepath.Join(workingDir, "signature"))
