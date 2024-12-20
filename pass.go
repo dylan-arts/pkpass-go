@@ -42,7 +42,7 @@ func New(environment, workingDir, passID, password string, cert io.Reader) (io.R
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
-	if environment != "develop" {
+	if environment != "develop" && environment != "release" && environment != "production" {
 		defer c.Close()
 	}
 
