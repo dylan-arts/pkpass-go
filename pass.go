@@ -27,6 +27,14 @@ const (
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
 func New(environment, workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
+	// get current working dir
+	owWorkDir, err := os.Getwd()
+	if err != nil {
+		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
+	// current
+	workingDir = filepath.Join(owWorkDir, workingDir)
 	// Copy certificate to file
 	certFile := filepath.Join(workingDir, "certificates.p12")
 	c, err := os.Create(certFile)
