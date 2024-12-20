@@ -65,7 +65,7 @@ func New(environment, workingDir, passID, password string, cert io.Reader) (io.R
 	defer w.Close()
 
 	// Bundle files from the passID directory
-	if err = bundle(w, passID, workingDir); err != nil {
+	if err = bundle(w, workingDir); err != nil {
 		return nil, err
 	}
 
@@ -113,19 +113,20 @@ func pem(workingDir, password string) error {
 	return nil
 }
 
-func bundle(w *zip.Writer, passDir, workingDir string) error {
-	files, err := ioutil.ReadDir(passDir)
+func bundle(w *zip.Writer, workingDir string) error {
+	files, err := ioutil.ReadDir(workingDir)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
+	// The rest of the code stays the same, just replace passDir with workingDir.
 	m := make(map[string]string)
 	for _, fi := range files {
 		if fi.IsDir() {
 			continue
 		}
 
-		f, err := os.Open(filepath.Join(passDir, fi.Name()))
+		f, err := os.Open(filepath.Join(workingDir, fi.Name()))
 		if err != nil {
 			return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 		}
@@ -146,7 +147,6 @@ func bundle(w *zip.Writer, passDir, workingDir string) error {
 		m[fi.Name()] = fmt.Sprintf("%x", sha)
 	}
 
-	// Write manifest.json
 	manifestPath := filepath.Join(workingDir, "manifest.json")
 	mf, err := os.Create(manifestPath)
 	if err != nil {
