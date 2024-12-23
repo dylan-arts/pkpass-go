@@ -27,6 +27,9 @@ const (
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
 func New(storageFolder, workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
+	// safeguard that user of this package can not alter and break pass working dir
+	workingDir = filepath.Join(workingDir, passID)
+
 	certFile := filepath.Join(workingDir, "certificates.p12")
 	c, err := os.Create(certFile)
 	if err != nil {
