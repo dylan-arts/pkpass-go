@@ -58,9 +58,8 @@ func New(storageFolder, passID, password string, cert io.Reader) (io.Reader, err
 	w := zip.NewWriter(buf)
 	defer w.Close()
 
-	passDir := filepath.Join(storageFolder, passID)
-
 	// Bundle files from the passID directory within storageFolder
+	passDir := filepath.Join(storageFolder, passID)
 	if err = bundle(w, passDir, tempDir); err != nil {
 		return nil, err
 	}
