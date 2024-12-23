@@ -29,8 +29,9 @@ const (
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
 func New(storageFolder, passFolder, passID, password string, cert io.Reader) (io.Reader, error) {
-	// Create a temporary directory for intermediate files
-	tempDir, err := os.MkdirTemp("", "pass-*")
+	// Create a temporary directory inside the storage folder
+	tempDir := filepath.Join(storageFolder, "temp", fmt.Sprintf("pass-%s", passID))
+	err := os.MkdirAll(tempDir, os.ModePerm)
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
