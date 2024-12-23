@@ -28,7 +28,7 @@ const (
 //   - passID: an identifier for the pass (used for reading content from passDir).
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
-func New(storageFolder, passID, password string, cert io.Reader) (io.Reader, error) {
+func New(storageFolder, passFolder, passID, password string, cert io.Reader) (io.Reader, error) {
 	// Create a temporary directory for intermediate files
 	tempDir, err := os.MkdirTemp("", "pass-*")
 	if err != nil {
@@ -59,8 +59,7 @@ func New(storageFolder, passID, password string, cert io.Reader) (io.Reader, err
 	defer w.Close()
 
 	// Bundle files from the passID directory within storageFolder
-	passDir := filepath.Join(storageFolder, passID)
-	if err = bundle(w, passDir, tempDir); err != nil {
+	if err = bundle(w, passFolder, tempDir); err != nil {
 		return nil, err
 	}
 
@@ -133,6 +132,8 @@ func pem(workingDir, password string) error {
 
 // bundle adds files from the pass directory to the zip writer and creates the manifest.json.
 func bundle(w *zip.Writer, passDir, tempDir string) error {
+	fmt.Printf("passDir: %v\n", passDir)
+	fmt.Printf("tempDir: %v\n", tempDir)
 	entries, err := os.ReadDir(passDir)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
@@ -145,7 +146,7 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 		}
 
 		filePath := filepath.Join(passDir, entry.Name())
-		if err := addFileToZip(w, filePath, entry.Name(), manifest); err != nil {
+		if err := addFileToZip(w, filePath, "test"+entry.Name(), manifest); err != nil {
 			return err
 		}
 	}
