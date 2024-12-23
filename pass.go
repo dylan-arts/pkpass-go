@@ -147,7 +147,7 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 		}
 
 		filePath := filepath.Join(passDir, entry.Name())
-		if err := addFileToZip(w, filePath, "test"+entry.Name(), manifest); err != nil {
+		if err := addFileToZip(w, filePath, entry.Name(), manifest); err != nil {
 			return err
 		}
 	}
