@@ -58,10 +58,13 @@ func New(storageFolder, passID, password string, cert io.Reader) (io.Reader, err
 	w := zip.NewWriter(buf)
 	defer w.Close()
 
-	// make sure pass dir exists
+	// make sure pass dir exists otherwise create
 	passDir := filepath.Join(storageFolder, passID)
-	if _, err := os.Stat(filepath.Join(storageFolder, passID)); err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	if _, err := os.Stat(passDir); os.IsNotExist(err) {
+		// create folder
+		if err := os.MkdirAll(passDir, 0755); err != nil {
+			return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+		}
 	}
 
 	// Bundle files from the passID directory within storageFolder
