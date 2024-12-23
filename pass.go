@@ -32,10 +32,7 @@ func New(environment, workingDir, passID, password string, cert io.Reader) (io.R
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
-
-	if environment != "local" {
-		defer c.Close()
-	}
+	defer c.Close()
 
 	_, err = io.Copy(c, cert)
 	if err != nil {
