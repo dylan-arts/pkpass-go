@@ -57,11 +57,8 @@ func New(environment, workingDir, passID, password string, cert io.Reader) (io.R
 		return nil, err
 	}
 
-	// Go up one directory for wwdr
-	parentDir := filepath.Dir(filepath.Dir(workingDir))
-
 	// Sign the manifest
-	if err = sign(w, workingDir, password, fmt.Sprintf("%s/wwdr.pem", parentDir)); err != nil {
+	if err = sign(w, workingDir, password, fmt.Sprintf("%s/wwdr.pem", workingDir)); err != nil {
 		return nil, err
 	}
 
