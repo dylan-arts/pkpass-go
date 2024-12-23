@@ -7,64 +7,87 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"net/http"
+
 	"github.com/globe-protocol/util-package"
 )
 
+// Constants for error messages
 const (
 	pkpassCreationError = "failed to create pass"
 )
 
-// New creates a new Apple pass, using a randomly generated temporary directory.
+// New creates a new Apple pass using a temporary directory for intermediate files.
+// It ensures that temporary files are cleaned up after the pass is generated.
 // Parameters:
-//   - workingDir: the base directory where temporary directories and files will be created.
+//   - storageFolder: the root storage folder containing wwdr, template folder, and private_key.p12.
 //   - passID: an identifier for the pass (used for reading content from passDir).
 //   - password: the password for unlocking the .p12 certificate.
 //   - cert: an io.Reader providing the .p12 certificate data.
-func New(storageFolder, workingDir, passID, password string, cert io.Reader) (io.Reader, error) {
-	certFile := filepath.Join(workingDir, "certificates.p12")
-	c, err := os.Create(certFile)
+func New(storageFolder, passID, password string, cert io.Reader) (io.Reader, error) {
+	// Create a temporary directory for intermediate files
+	tempDir, err := os.MkdirTemp("", "pass-*")
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
-	defer c.Close()
+	// Ensure the temporary directory is removed after function completes
+	defer os.RemoveAll(tempDir)
 
-	_, err = io.Copy(c, cert)
-	if err != nil {
-		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	// Paths for temporary files
+	certFile := filepath.Join(tempDir, "certificates.p12")
+
+	// Write the .p12 certificate to the temporary directory
+	if err := writeFile(certFile, cert); err != nil {
+		return nil, err
 	}
 
 	// Extract key and cert from p12
-	if err = pem(workingDir, password); err != nil {
+	if err = pem(tempDir, password); err != nil {
 		return nil, err
 	}
-	if err = key(workingDir, password); err != nil {
+	if err = key(tempDir, password); err != nil {
 		return nil, err
 	}
 
-	// Create zip buffer
+	// Create a zip buffer
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 	defer w.Close()
 
-	// Bundle files from the passID directory
-	if err = bundle(w, workingDir); err != nil {
+	// Bundle files from the passID directory within storageFolder
+	passDir := filepath.Join(storageFolder, passID)
+	if err = bundle(w, passDir, tempDir); err != nil {
 		return nil, err
 	}
 
 	// Sign the manifest
-	if err = sign(w, workingDir, password, fmt.Sprintf("%s/wwdr.pem", storageFolder)); err != nil {
+	wwdrCertPath := filepath.Join(storageFolder, "wwdr.pem")
+	if err = sign(w, tempDir, password, wwdrCertPath); err != nil {
 		return nil, err
 	}
 
 	return buf, nil
 }
 
+// writeFile writes data from an io.Reader to a specified file path.
+func writeFile(path string, r io.Reader) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, r); err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+	return nil
+}
+
+// key extracts the private key from the .p12 certificate.
 func key(workingDir, password string) error {
 	cmd := exec.Command(
 		"openssl",
@@ -77,12 +100,16 @@ func key(workingDir, password string) error {
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s, error: %s, and output: %s", workingDir, err.Error(), output), pkpassCreationError)
+		return util.NewErrorf(
+			http.StatusInternalServerError,
+			fmt.Errorf("failed to execute key extraction: %v, output: %s", err, output),
+			pkpassCreationError,
+		)
 	}
-
 	return nil
 }
 
+// pem extracts the certificate from the .p12 file.
 func pem(workingDir, password string) error {
 	cmd := exec.Command(
 		"openssl",
@@ -95,76 +122,105 @@ func pem(workingDir, password string) error {
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed to execute command with dir: %s, error: %s, and output: %s", workingDir, err.Error(), output), pkpassCreationError)
+		return util.NewErrorf(
+			http.StatusInternalServerError,
+			fmt.Errorf("failed to execute pem extraction: %v, output: %s", err, output),
+			pkpassCreationError,
+		)
+	}
+	return nil
+}
+
+// bundle adds files from the pass directory to the zip writer and creates the manifest.json.
+func bundle(w *zip.Writer, passDir, tempDir string) error {
+	entries, err := os.ReadDir(passDir)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
+	manifest := make(map[string]string)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		filePath := filepath.Join(passDir, entry.Name())
+		if err := addFileToZip(w, filePath, entry.Name(), manifest); err != nil {
+			return err
+		}
+	}
+
+	// Create and add manifest.json to the zip
+	manifestPath := filepath.Join(tempDir, "manifest.json")
+	if err := createManifest(manifestPath, manifest); err != nil {
+		return err
+	}
+
+	// Add manifest.json to the zip
+	if err := addFileToZip(w, manifestPath, "manifest.json", nil); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func bundle(w *zip.Writer, workingDir string) error {
-	files, err := ioutil.ReadDir(workingDir)
+// addFileToZip adds a single file to the zip and updates the manifest map.
+func addFileToZip(w *zip.Writer, filePath, zipName string, manifest map[string]string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+	defer file.Close()
+
+	hw := sha1.New()
+	zw, err := w.Create(zipName)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
-	// The rest of the code stays the same, just replace passDir with workingDir.
-	m := make(map[string]string)
-	for _, fi := range files {
-		if fi.IsDir() {
-			continue
-		}
-
-		f, err := os.Open(filepath.Join(workingDir, fi.Name()))
-		if err != nil {
-			return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-		}
-		defer f.Close()
-
-		hw := sha1.New()
-		zw, err := w.Create(fi.Name())
-		if err != nil {
-			return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-		}
-
-		mw := io.MultiWriter(hw, zw)
-		if _, err = io.Copy(mw, f); err != nil {
-			return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-		}
-
-		sha := hw.Sum(nil)
-		m[fi.Name()] = fmt.Sprintf("%x", sha)
+	var mw io.Writer = zw
+	if manifest != nil {
+		mw = io.MultiWriter(hw, zw)
 	}
 
-	manifestPath := filepath.Join(workingDir, "manifest.json")
+	if _, err = io.Copy(mw, file); err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
+	if manifest != nil {
+		sha := hw.Sum(nil)
+		manifest[zipName] = fmt.Sprintf("%x", sha)
+	}
+
+	return nil
+}
+
+// createManifest creates the manifest.json file.
+func createManifest(manifestPath string, manifest map[string]string) error {
 	mf, err := os.Create(manifestPath)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 	defer mf.Close()
 
-	zw, err := w.Create("manifest.json")
-	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-	}
-	mw := io.MultiWriter(mf, zw)
-
-	if err = json.NewEncoder(mw).Encode(m); err != nil {
+	if err := json.NewEncoder(mf).Encode(manifest); err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
 	return nil
 }
 
-func sign(w *zip.Writer, workingDir, password, wwdrCertPath string) error {
+// sign signs the manifest and adds the signature to the zip.
+func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 	cmd := exec.Command(
 		"openssl",
 		"smime",
 		"-sign",
-		"-signer", filepath.Join(workingDir, "certificate.pem"),
-		"-inkey", filepath.Join(workingDir, "key.pem"),
+		"-signer", filepath.Join(tempDir, "certificate.pem"),
+		"-inkey", filepath.Join(tempDir, "key.pem"),
 		"-certfile", wwdrCertPath,
-		"-in", filepath.Join(workingDir, "manifest.json"),
-		"-out", filepath.Join(workingDir, "signature"),
+		"-in", filepath.Join(tempDir, "manifest.json"),
+		"-out", filepath.Join(tempDir, "signature"),
 		"-outform", "der",
 		"-binary",
 		"-passin", fmt.Sprintf("pass:%s1234", password),
@@ -172,23 +228,17 @@ func sign(w *zip.Writer, workingDir, password, wwdrCertPath string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, fmt.Errorf("failed with err: %s and output: %s", err.Error(), output), pkpassCreationError)
+		return util.NewErrorf(
+			http.StatusInternalServerError,
+			fmt.Errorf("failed to sign manifest: %v, output: %s", err, output),
+			pkpassCreationError,
+		)
 	}
 
-	sig, err := os.Open(filepath.Join(workingDir, "signature"))
-	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-	}
-	defer sig.Close()
-
-	zw, err := w.Create("signature")
-	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-	}
-
-	_, err = io.Copy(zw, sig)
-	if err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	// Add signature to the zip
+	sigPath := filepath.Join(tempDir, "signature")
+	if err := addFileToZip(w, sigPath, "signature", nil); err != nil {
+		return err
 	}
 
 	return nil
