@@ -247,11 +247,10 @@ func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 	}
 
 	// DEBUG
-	info, err := os.Stat(filepath.Join(tempDir, "signature"))
+	_, err = os.Stat(filepath.Join(tempDir, "signature"))
 	if err != nil {
 		log.Println("file doest not exist")
 	}
-	log.Println("signature file size before signing", info.Size())
 
 	// Add signature to the zip
 	sigPath := filepath.Join(tempDir, "signature")
