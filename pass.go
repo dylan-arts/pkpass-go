@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"net/http"
 
@@ -166,6 +167,13 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 		return err
 	}
 
+	// wait to check if manifest.json is created instantly continue if it is
+	for time.Now().UnixNano() < time.Now().Add(50*time.Millisecond).UnixNano() {
+		if _, err := os.Stat(manifestPath); err == nil {
+			break
+		}
+	}
+
 	// Add manifest.json to the zip
 	if err := addFileToZip(w, manifestPath, "manifest.json", nil); err != nil {
 		return err
@@ -243,6 +251,13 @@ func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 			fmt.Errorf("failed to sign manifest: %v, output: %s", err, output),
 			pkpassCreationError,
 		)
+	}
+
+	// wait to check if signature is created instantly continue if it is
+	for time.Now().UnixNano() < time.Now().Add(50*time.Millisecond).UnixNano() {
+		if _, err := os.Stat(filepath.Join(tempDir, "signature")); err == nil {
+			break
+		}
 	}
 
 	// Add signature to the zip
