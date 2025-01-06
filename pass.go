@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"net/http"
 
@@ -142,17 +141,6 @@ func pem(storageFolder, password string) error {
 	return nil
 }
 
-func ensureFileExists(filePath string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filePath); err == nil {
-			return nil
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return fmt.Errorf("file not available: %s", filePath)
-}
-
 // bundle adds files from the pass directory to the zip writer and creates the manifest.json.
 func bundle(w *zip.Writer, passDir, tempDir string) error {
 	entries, err := os.ReadDir(passDir)
@@ -172,21 +160,10 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 		}
 	}
 
-	for time.Now().Before(time.Now().Add(2 * time.Second)) {
-		if _, err := os.Stat(filepath.Join(tempDir, "manifest.json")); err == nil {
-			break
-		}
-	}
-
 	// Create and add manifest.json to the zip
 	manifestPath := filepath.Join(tempDir, "manifest.json")
 	if err := createManifest(manifestPath, manifest); err != nil {
 		return err
-	}
-
-	if err := ensureFileExists(manifestPath, 5*time.Second); err != nil {
-		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
-
 	}
 
 	// Add manifest.json to the zip
@@ -198,7 +175,7 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 }
 
 // addFileToZip adds a single file to the zip and updates the manifest map.
-func addFileToZip(w *zip.Writer, filePath, destFileName string, manifest map[string]string) error {
+func addFileToZip(w *zip.Writer, filePath, zipName string, manifest map[string]string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
@@ -206,7 +183,7 @@ func addFileToZip(w *zip.Writer, filePath, destFileName string, manifest map[str
 	defer file.Close()
 
 	hw := sha1.New()
-	zw, err := w.Create(destFileName)
+	zw, err := w.Create(zipName)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
@@ -222,7 +199,7 @@ func addFileToZip(w *zip.Writer, filePath, destFileName string, manifest map[str
 
 	if manifest != nil {
 		sha := hw.Sum(nil)
-		manifest[destFileName] = fmt.Sprintf("%x", sha)
+		manifest[zipName] = fmt.Sprintf("%x", sha)
 	}
 
 	return nil
