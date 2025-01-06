@@ -88,13 +88,18 @@ func writeFile(path string, r io.Reader) error {
 }
 
 // key extracts the private key from the .p12 certificate.
-func key(workingDir, password string) error {
+func key(storageFolder, password string) error {
+	// check if it already exists
+	if _, err := os.Stat(filepath.Join(storageFolder, "key.pem")); err == nil {
+		return nil
+	}
+
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in", filepath.Join(workingDir, "certificates.p12"),
+		"-in", filepath.Join(storageFolder, "certificates.p12"),
 		"-nocerts",
-		"-out", filepath.Join(workingDir, "key.pem"),
+		"-out", filepath.Join(storageFolder, "key.pem"),
 		"-passin", fmt.Sprintf("pass:%s", password),
 		"-passout", fmt.Sprintf("pass:%s1234", password),
 	)
@@ -110,14 +115,19 @@ func key(workingDir, password string) error {
 }
 
 // pem extracts the certificate from the .p12 file.
-func pem(workingDir, password string) error {
+func pem(storageFolder, password string) error {
+	// check if it already exists
+	if _, err := os.Stat(filepath.Join(storageFolder, "certificate.pem")); err == nil {
+		return nil
+	}
+
 	cmd := exec.Command(
 		"openssl",
 		"pkcs12",
-		"-in", filepath.Join(workingDir, "certificates.p12"),
+		"-in", filepath.Join(storageFolder, "certificates.p12"),
 		"-clcerts",
 		"-nokeys",
-		"-out", filepath.Join(workingDir, "certificate.pem"),
+		"-out", filepath.Join(storageFolder, "certificate.pem"),
 		"-passin", fmt.Sprintf("pass:%s", password),
 	)
 	output, err := cmd.CombinedOutput()
