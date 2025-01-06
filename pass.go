@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -244,6 +245,13 @@ func sign(w *zip.Writer, tempDir, password, wwdrCertPath string) error {
 			pkpassCreationError,
 		)
 	}
+
+	// DEBUG
+	info, err := os.Stat(filepath.Join(tempDir, "signature"))
+	if err != nil {
+		log.Println("file doest not exist")
+	}
+	log.Println("signature file size before signing", info.Size())
 
 	// Add signature to the zip
 	sigPath := filepath.Join(tempDir, "signature")
