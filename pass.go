@@ -133,8 +133,6 @@ func pem(workingDir, password string) error {
 
 // bundle adds files from the pass directory to the zip writer and creates the manifest.json.
 func bundle(w *zip.Writer, passDir, tempDir string) error {
-	fmt.Printf("passDir: %v\n", passDir)
-	fmt.Printf("tempDir: %v\n", tempDir)
 	entries, err := os.ReadDir(passDir)
 	if err != nil {
 		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
