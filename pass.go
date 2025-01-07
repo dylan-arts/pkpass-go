@@ -36,8 +36,6 @@ func New(storageFolder, passFolder, passID, password string, cert io.Reader) (io
 	if err != nil {
 		return nil, util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
-	// Ensure the temporary directory is removed after function completes
-	defer os.RemoveAll(tempDir)
 
 	// Paths for temporary files
 	certFile := filepath.Join(tempDir, "certificates.p12")
