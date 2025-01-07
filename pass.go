@@ -48,10 +48,10 @@ func New(storageFolder, passFolder, passID, password string, cert io.Reader) (io
 	}
 
 	// Extract key and cert from p12
-	if err = pem(tempDir, password); err != nil {
+	if err = pem(storageFolder, tempDir); err != nil {
 		return nil, err
 	}
-	if err = key(tempDir, password); err != nil {
+	if err = key(storageFolder, tempDir); err != nil {
 		return nil, err
 	}
 
@@ -89,56 +89,42 @@ func writeFile(path string, r io.Reader) error {
 }
 
 // key extracts the private key from the .p12 certificate.
-func key(storageFolder, password string) error {
-	// check if it already exists
-	if _, err := os.Stat(filepath.Join(storageFolder, "key.pem")); err == nil {
-		return nil
+func key(storageFolder, tempDir string) error {
+	sourceFile, err := os.Open(filepath.Join(storageFolder, "key.pem"))
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
-	cmd := exec.Command(
-		"openssl",
-		"pkcs12",
-		"-in", filepath.Join(storageFolder, "certificates.p12"),
-		"-nocerts",
-		"-out", filepath.Join(storageFolder, "key.pem"),
-		"-passin", fmt.Sprintf("pass:%s", password),
-		"-passout", fmt.Sprintf("pass:%s1234", password),
-	)
-	output, err := cmd.CombinedOutput()
+	destinationFile, err := os.Create(filepath.Join(tempDir, "key.pem"))
 	if err != nil {
-		return util.NewErrorf(
-			http.StatusInternalServerError,
-			fmt.Errorf("failed to execute key extraction: %v, output: %s", err, output),
-			pkpassCreationError,
-		)
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
+
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
 	return nil
 }
 
-// pem extracts the certificate from the .p12 file.
-func pem(storageFolder, password string) error {
-	// check if it already exists
-	if _, err := os.Stat(filepath.Join(storageFolder, "certificate.pem")); err == nil {
-		return nil
+// pem copies the certificate from the storage folder to the temporary directory.
+func pem(storageFolder, tempDir string) error {
+	sourceFile, err := os.Open(filepath.Join(storageFolder, "certificate.pem"))
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
 
-	cmd := exec.Command(
-		"openssl",
-		"pkcs12",
-		"-in", filepath.Join(storageFolder, "certificates.p12"),
-		"-clcerts",
-		"-nokeys",
-		"-out", filepath.Join(storageFolder, "certificate.pem"),
-		"-passin", fmt.Sprintf("pass:%s", password),
-	)
-	output, err := cmd.CombinedOutput()
+	destinationFile, err := os.Create(filepath.Join(tempDir, "certificate.pem"))
 	if err != nil {
-		return util.NewErrorf(
-			http.StatusInternalServerError,
-			fmt.Errorf("failed to execute pem extraction: %v, output: %s", err, output),
-			pkpassCreationError,
-		)
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
 	}
+
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		return util.NewErrorf(http.StatusInternalServerError, err, pkpassCreationError)
+	}
+
 	return nil
 }
 
