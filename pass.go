@@ -151,12 +151,6 @@ func bundle(w *zip.Writer, passDir, tempDir string) error {
 		return err
 	}
 
-	// DEBUG
-	_, err = os.Stat(manifestPath)
-	if err != nil {
-		log.Println("file doest not exist")
-	}
-
 	// Add manifest.json to the zip
 	if err := addFileToZip(w, manifestPath, "manifest.json", nil); err != nil {
 		return err
